@@ -6,3 +6,20 @@ Bayesian Update (nâng cao) - dùng prediction trước làm prior, update với
 - Thường dùng với Prophet hoặc Kalman Filter
 
 Lí do sử dụng: giải pháp cho các mô hình dự đoán theo thời gian thực (ví dụ chứng khoán, ...)
+
+Model chính: LightGBM + Walk-Forward Expanding Window
+Stack 3 tầng:
+Tầng 1 — Base Models (train riêng, lấy OOF predictions)
+
+LightGBM với objective regression_l1 (log1p target) — model chủ lực
+LightGBM với objective tweedie — bổ sung cho heavy-tail
+Prophet — bắt trend + seasonality dài hạn
+
+Tầng 2 — Residual Correction
+
+EWMA bias correction (rolling 14 ngày gần nhất)
+Event multiplier cho Tết, 11.11, 12.12, Black Friday
+
+Tầng 3 — Blend
+
+Weighted average OOF của 3 model trên bằng SLSQP
