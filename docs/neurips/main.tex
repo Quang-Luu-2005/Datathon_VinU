@@ -1,0 +1,96 @@
+\documentclass{article}
+
+% Preferred report template.
+% This uses the cleaner NeurIPS 2024 style in preprint mode.
+\usepackage[preprint]{neurips_2024}
+
+% For anonymous NeurIPS-style submission, use:
+% \usepackage{neurips_2024}
+% For camera-ready NeurIPS 2024, use:
+% \usepackage[final]{neurips_2024}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{xcolor}
+
+\title{Project Title}
+
+\author{%
+  Team Name \\
+  VinUniversity Datathon \\
+  \texttt{team@example.com} \\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Write a concise summary of the problem, method, experiments, and key findings.
+\end{abstract}
+
+\section{Introduction}
+
+State the problem, why it matters, and the main contributions of the work.
+Use citations as needed, for example \citet{vaswani2017attention}.
+
+\section{Related Work}
+
+Summarize the closest prior work and explain how this project differs.
+
+\section{Method}
+
+Describe the model, algorithm, data processing pipeline, or analysis approach.
+Use equations when they make the method clearer:
+\begin{equation}
+  \hat{y} = f_\theta(x).
+\end{equation}
+
+\section{Experiments}
+
+Describe datasets, metrics, baselines, implementation details, and evaluation
+protocols.
+
+\begin{table}[h]
+  \centering
+  \caption{Example results table. Replace with project metrics.}
+  \label{tab:results}
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Metric 1 & Metric 2 \\
+    \midrule
+    Baseline & 0.00 & 0.00 \\
+    Proposed & 0.00 & 0.00 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Results and Discussion}
+
+Report the main findings, error analysis, ablations, and limitations.
+
+\section{Conclusion}
+
+Summarize the takeaway and possible next steps.
+
+\begin{ack}
+Acknowledgments are shown in preprint/final mode and hidden in anonymous
+submission mode by the NeurIPS style file.
+\end{ack}
+
+\input{references.tex}
+
+\input{appendix.tex}
+
+% Uncomment this only if the submission requires the NeurIPS paper checklist.
+% \newpage
+% \input{checklist.tex}
+
+\end{document}
