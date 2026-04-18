@@ -23,3 +23,30 @@ Event multiplier cho Tết, 11.11, 12.12, Black Friday
 Tầng 3 — Blend
 
 Weighted average OOF của 3 model trên bằng SLSQP
+
+Sau khi đã chạy xong lần 1 thì tôi đã optimize theo các bước này:
+
+Đánh giá: model ở mức TRUNG BÌNH, còn dư địa lớn để cải thiện
+R² 0.79 cho Revenue trên time-series có trend mạnh 10+ năm — nghe có vẻ ổn nhưng thực ra chưa đủ. Lý do: với dữ liệu có trend rõ, seasonal naive baseline (lag 365) đã cho R² khoảng 0.70-0.80. Bạn đang chỉ hơn baseline một chút.
+Để biết model thực sự tốt hay không, bạn cần check MASE (Mean Absolute Scaled Error vs seasonal naive). Thêm dòng này vào code:
+
+7 điểm yếu chí mạng trong code hiện tại
+1. ❌ Bỏ phí 13/15 files dataset — đây là lỗi lớn nhất
+Code bạn chỉ đọc sales.csv. Nhưng đề bài có 15 files! Thiếu:
+FileGiá trịweb_traffic.csvLeading indicator cực mạnh (sessions lag 1-7 thường tương quan 0.7+ với revenue)promotions.csvBiết trước → dùng same-day hợp lệ. Thiếu cái này là bỏ lỡ 10-15% accuracyinventory.csvStockout → mất doanh thu; overstock → đẩy saleorders.csv + order_items.csvCó thể aggregate theo ngày để có thêm signal
+Fix: thêm các cross-table features ngay. Đây là leverage #1.
+2. ❌ Không tune hyperparameters
+Code dùng fixed params: max_depth=8, min_child_weight=20, lr=0.03. Chưa chạy Optuna lần nào → mất 5-10% performance.
+3. ❌ Không có multi-seed bagging
+Mỗi model train với 1 seed. M5 winner dùng 5-7 seeds → giảm 1-3% RMSE "miễn phí".
+4. ❌ CV chỉ 4 folds — variance cao
+CV_MAX_SPLITS = 4 là quá ít cho 10 năm data. Blend weights và event multipliers học được sẽ kém ổn định. Nên tăng lên 6-8 folds.
+5. ❌ Recursive forecast 548 ngày compound error rất nặng
+Đây là vấn đề âm thầm. Khi dự báo dài hạn, lag_1 ở ngày 548 = prediction của ngày 547 (đã có sai số). Error tích lũy theo cấp số nhân.
+Fix: dùng direct multi-step forecasting (train riêng model cho horizon 1, 7, 30 ngày) hoặc non-recursive approach (features chỉ dùng lag ≥ 30).
+6. ❌ Event multiplier bị COVID làm nhiễu
+Code tính Tết multiplier từ tất cả OOF data, bao gồm Tết 2020-2022 (COVID). Những năm này outlier → multiplier bị sai.
+Fix: exclude 2020-2021 khi tính multiplier:
+pythonoof_clean = oof[~oof[DATE_COL].between('2020-01-01', '2021-12-31')]
+7. ❌ Feature importance thay vì SHAP
+Đề bài bắt buộc SHAP/PDP trong phần Explainability (trang 12, mục Ràng buộc). Feature importance của XGBoost không đủ.
