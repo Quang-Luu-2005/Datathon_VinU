@@ -1,0 +1,8 @@
+Build model dự trên ý tưởng ý tưởng walk-forward. Nên build LightGBM + Expanding Window + Residual Correction.
+
+Bayesian Update (nâng cao) - dùng prediction trước làm prior, update với actual:
+
+- Phức tạp hơn nhưng tự động cân bằng giữa "tin model cũ" vs "học từ data mới"
+- Thường dùng với Prophet hoặc Kalman Filter
+
+Lí do sử dụng: giải pháp cho các mô hình dự đoán theo thời gian thực (ví dụ chứng khoán, ...)
