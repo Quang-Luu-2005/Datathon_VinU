@@ -1,0 +1,22 @@
+﻿flowchart TD
+    A[Dữ liệu gốc] --> B[Chuẩn hóa Date và audit missing outlier regime]
+    B --> C[Tạo target dẫn xuất Revenue COGS Gross Profit COGS Ratio]
+    B --> D[Dựng driver states từ orders promotions returns inventory traffic reviews]
+    C --> E[Tạo feature block lag rolling calendar event mix hierarchy]
+    D --> E
+    E --> F[Thiết kế rolling-origin backtests]
+    F --> G[Baseline thống kê ETS ARIMA SARIMA seasonal naive]
+    F --> H[ML aggregate XGBoost Random Forest]
+    F --> I[Panel or hierarchy models Global XGB N-BEATS TCN]
+    I --> J{Có nhiều related series và covariates mạnh không}
+    J -- Có --> K[DeepAR hoặc TFT]
+    J -- Không --> L[Bỏ qua hoặc hạ ưu tiên DeepAR TFT]
+    G --> M[Horizon-specific evaluation MAE RMSE R2 MASE sMAPE]
+    H --> M
+    I --> M
+    K --> N[Probabilistic layer quantiles and intervals]
+    M --> O[Chọn top models theo nhiều horizon]
+    N --> O
+    O --> P[Blend theo horizon hoặc regime]
+    P --> Q[Refit toàn bộ train và forecast final]
+    Q --> R[SHAP feature importance reporting and diagnostics]
