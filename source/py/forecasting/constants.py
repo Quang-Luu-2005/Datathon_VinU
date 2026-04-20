@@ -6,9 +6,10 @@ import pandas as pd
 
 SEED = 42
 DATE_COL = "date"
-TARGETS = ("revenue", "cogs")
+TARGETS = ("revenue", "cogs", "cogs_ratio")
 
-TET_DATES = pd.to_datetime(
+# Used when lunardate is unavailable.
+TET_DATES_FALLBACK = pd.to_datetime(
     [
         "2012-01-23",
         "2013-02-10",
@@ -24,6 +25,9 @@ TET_DATES = pd.to_datetime(
         "2023-01-22",
         "2024-02-10",
         "2025-01-29",
+        "2026-02-17",
+        "2027-02-06",
+        "2028-01-26",
     ]
 )
 
@@ -38,7 +42,16 @@ EVENT_COLS = [
     "is_dd_11_11",
     "is_dd_12_12",
     "is_black_friday",
+    "is_payday_window",
 ]
+
+# v4 bucket design: merged long horizon bucket.
+HORIZON_BUCKETS = (
+    ("h01_030", 1, 30),
+    ("h031_090", 31, 90),
+    ("h091_180", 91, 180),
+    ("h181_plus", 181, 9999),
+)
 
 DEFAULT_TUNED_PARAMS = {
     "learning_rate": 0.03,
@@ -51,6 +64,5 @@ DEFAULT_TUNED_PARAMS = {
     "lambda_l1": 0.01,
     "lambda_l2": 0.1,
     "min_gain_to_split": 0.0,
-    "max_bin": 255,
+    "max_bin": 63,
 }
-

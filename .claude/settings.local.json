@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import json; nb = json.load\\(open\\('d:/Datathon/Datathon_VinU/source/inbpy/kaggle_multigpu_modeling_optimized.ipynb', 'r', encoding='utf-8'\\)\\); print\\('cells:', len\\(nb['cells']\\)\\); [print\\(f'--- Cell {i} \\({c[\\\\\"cell_type\\\\\"]}\\) ---'\\); print\\(''.join\\(c['source']\\)[:800]\\) for i,c in enumerate\\(nb['cells']\\)]\")",
+      "Bash(python source/_inspect.py)",
+      "Bash(python source/_dump.py)",
+      "Bash(python -c ' *)",
+      "Bash(python source/build_notebook_v3.py)",
+      "Bash(python source/_smoketest_v3.py)",
+      "Bash(python -c \"import xgboost; print\\(xgboost.__version__\\)\")",
+      "Bash(python -m pip list)",
+      "Bash(python -m pip install -q xgboost shap)"
+    ]
+  }
+}
