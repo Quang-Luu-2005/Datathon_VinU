@@ -1,16 +1,22 @@
 \documentclass{article}
 
-% Preferred report template.
-% This uses the cleaner NeurIPS 2024 style in preprint mode.
-\usepackage[preprint]{neurips_2024}
+% Style NeurIPS 2025, lấy theo Call for Papers chính thức:
+% https://neurips.cc/Conferences/2025/CallForPapers
+% Nộp ẩn danh: \usepackage{neurips_2025}
+% Bản báo cáo/preprint: \usepackage[preprint]{neurips_2025}
+% Camera-ready: \usepackage[final]{neurips_2025}
+\usepackage[preprint]{neurips_2025}
 
-% For anonymous NeurIPS-style submission, use:
-% \usepackage{neurips_2024}
-% For camera-ready NeurIPS 2024, use:
-% \usepackage[final]{neurips_2024}
-
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1,T5]{fontenc}
+  \usepackage[vietnamese,english]{babel}
+\else
+  \usepackage{fontspec}
+  \setmainfont{Times New Roman}
+  \usepackage[vietnamese,english]{babel}
+\fi
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{booktabs}
@@ -20,10 +26,29 @@
 \usepackage{microtype}
 \usepackage{xcolor}
 
-\title{Project Title}
+\selectlanguage{vietnamese}
+
+\makeatletter
+\renewcommand{\@noticestring}{Bản thảo báo cáo.}
+\makeatother
+
+\renewenvironment{abstract}%
+{%
+  \vskip 0.075in%
+  \centerline{\large\bfseries Tóm tắt}%
+  \vspace{0.5ex}%
+  \begin{quote}%
+}
+{%
+  \par%
+  \end{quote}%
+  \vskip 1ex%
+}
+
+\title{Dự báo lai chống rò rỉ dữ liệu cho Revenue và COGS theo ngày}
 
 \author{%
-  Team Name \\
+  Nhóm Datathon VinU \\
   VinUniversity Datathon \\
   \texttt{team@example.com} \\
 }
@@ -33,63 +58,240 @@
 \maketitle
 
 \begin{abstract}
-Write a concise summary of the problem, method, experiments, and key findings.
+Báo cáo này trình bày hệ thống dự báo lai cho hai đại lượng tài chính theo
+ngày là Revenue và Cost of Goods Sold (COGS) trên horizon 548 ngày. Phương pháp
+kết hợp các feature biết trước theo thời gian, mốc lịch và khuyến mãi, seasonal
+anchor, nhiều nhánh XGBoost, blending bằng out-of-fold predictions, trọng số
+theo horizon bucket, hiệu chỉnh sai số trung vị, Kalman residual correction có
+gate, và một nhánh reconciliation cho COGS dựa trên tỷ lệ COGS/Revenue. Pipeline
+được thiết kế để tránh rò rỉ dữ liệu: tập test chỉ cung cấp ngày và các biến
+known-future, còn target lag được sinh từ lịch sử quá khứ hoặc từ prediction
+recursive trước đó. Rolling-origin validation được dùng để mô phỏng đúng bài
+toán dự báo mà không train trên nhãn tương lai.
 \end{abstract}
 
-\section{Introduction}
+\section{Giới thiệu}
 
-State the problem, why it matters, and the main contributions of the work.
-Use citations as needed, for example \citet{vaswani2017attention}.
+Bài toán của cuộc thi là dự báo chuỗi thời gian tài chính dài hạn ở tần suất
+ngày. Mô hình cần dự báo đồng thời Revenue và COGS cho giai đoạn submission dựa
+trên lịch sử doanh số hằng ngày và metadata khuyến mãi nếu có. Bối cảnh này
+khác các bài toán demand forecasting ngắn hạn, vì phần lớn horizon không thể dựa
+vào các lag ngắn đã quan sát được. Do đó, lời giải cần cân bằng giữa ngoại suy
+mùa vụ, feature known-future ổn định, mô hình gradient boosting trực tiếp và các
+bước hậu xử lý bảo thủ.
 
-\section{Related Work}
+Báo cáo này mô tả notebook cuối cùng của hướng V5 Hybrid. Các đóng góp chính
+gồm: (i) feature store deterministic chỉ dùng calendar, event và promotion-plan
+biết trước; (ii) rolling-origin validation theo đúng chiều thời gian; (iii) thư
+viện candidate XGBoost đa dạng và được blend bằng out-of-fold predictions; (iv)
+phân rã target COGS qua nhánh tỷ lệ COGS/Revenue; và (v) các diagnostics giúp
+giải thích đóng góp của từng candidate và từng bước hậu xử lý.
 
-Summarize the closest prior work and explain how this project differs.
+\section{Phương pháp tiếp cận}
 
-\section{Method}
+\subsection{Ý tưởng tổng quát}
 
-Describe the model, algorithm, data processing pipeline, or analysis approach.
-Use equations when they make the method clearer:
+Gọi $y^{R}_{t}$ là Revenue và $y^{C}_{t}$ là COGS tại ngày $t$. Hệ thống dự báo
+Revenue trực tiếp, dự báo COGS trực tiếp, đồng thời dự báo thêm tỷ lệ chi phí
 \begin{equation}
-  \hat{y} = f_\theta(x).
+  r_t = \mathrm{clip}\left(\frac{y^{C}_{t}}{\max(y^{R}_{t}, 1)}, 0.01, 3.0\right).
 \end{equation}
+COGS cuối cùng được reconcile theo công thức
+\begin{equation}
+  \hat{y}^{C}_t =
+  \alpha \hat{y}^{C,\mathrm{direct}}_t +
+  (1-\alpha)\hat{y}^{R}_t \hat{r}_t,
+\end{equation}
+trong đó $\alpha \in [0,1]$ được chọn bằng MAE trên out-of-fold validation. Cách
+làm này đưa ràng buộc kinh doanh giữa doanh thu và chi phí vào pipeline, nhưng
+vẫn giữ một mô hình COGS trực tiếp để bắt các biến động chi phí không được giải
+thích hoàn toàn bởi Revenue.
 
-\section{Experiments}
+Ma trận feature được chia thành hai nhóm. Nhóm known-future gồm các biến từ
+ngày tháng, Fourier terms, tháng/quý, khoảng cách tới Tết, double-day events,
+Black Friday/Cyber Monday, payday windows và các thống kê từ kế hoạch khuyến
+mãi. Nhóm past-only gồm lag target và rolling statistics. Trong validation và
+test, feature lag được sinh theo kiểu recursive: sau khi mô hình dự báo ngày
+$t$, prediction đó có thể trở thành lịch sử cho ngày $t+1$, nhưng actual của
+validation hoặc test không bao giờ được đưa vào lịch sử recursive.
 
-Describe datasets, metrics, baselines, implementation details, and evaluation
-protocols.
+\subsection{Pipeline mô hình}
+
+Bảng~\ref{tab:pipeline} tóm tắt pipeline thực thi trong notebook. Quy trình này
+được chạy cho Revenue, COGS trực tiếp và COGS ratio; riêng COGS ratio dùng một
+model library nhỏ hơn.
 
 \begin{table}[h]
   \centering
-  \caption{Example results table. Replace with project metrics.}
-  \label{tab:results}
-  \begin{tabular}{lcc}
+  \caption{Pipeline V5 Hybrid được triển khai trong notebook.}
+  \label{tab:pipeline}
+  \small
+  \begin{tabular}{p{0.16\linewidth}p{0.27\linewidth}p{0.45\linewidth}}
     \toprule
-    Method & Metric 1 & Metric 2 \\
+    Bước & Hàm/khối code & Vai trò \\
     \midrule
-    Baseline & 0.00 & 0.00 \\
-    Proposed & 0.00 & 0.00 \\
+    Đọc dữ liệu & \texttt{load\_data} &
+      Đọc sales, sample submission và promotions nếu có. \\
+    Feature store & \texttt{build\_feature\_frame} &
+      Tạo calendar, event và promotion features biết trước. \\
+    Lag features & \texttt{make\_lag\_features} &
+      Tạo lag và rolling statistics đã shift từ target quá khứ. \\
+    Validation & \texttt{make\_splits} &
+      Tạo rolling-origin expanding-window folds. \\
+    Train target & \texttt{train\_target\_hybrid} &
+      Fit anchors, XGBoost heads, blend, calibration và Kalman gate. \\
+    Reconciliation & \texttt{run\_pipeline} &
+      Kết hợp COGS trực tiếp và Revenue nhân với COGS ratio. \\
+    Output & \texttt{run\_pipeline} &
+      Ghi submission, OOF predictions, component forecasts và summary JSON. \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\section{Results and Discussion}
+Model library cho Revenue và COGS trực tiếp gồm seasonal anchor và năm nhánh
+XGBoost: hai mô hình all-history trên log-scale với squared-error, một mô hình
+recent-history trên log-scale, một mô hình recent-history với absolute-error, và
+một mô hình Tweedie. Một mô hình lag recursive có thể được bật để bổ sung tín
+hiệu từ quá khứ gần. Nhánh COGS ratio dùng hai XGBoost head nhỏ hơn: một mô
+hình all-history và một mô hình recent-history absolute-error. XGBoost được dùng
+vì tree ensembles xử lý tốt các tương tác phi tuyến giữa calendar, event và
+promotion features, đồng thời vẫn nhanh và dễ tái lập \citep{xgboost}.
 
-Report the main findings, error analysis, ablations, and limitations.
+Với mỗi target, các prediction OOF được blend bằng trọng số không âm, tối ưu
+theo MAE thông qua các mẫu Dirichlet. Trọng số blend có thể được chuyên biệt
+theo horizon bucket: ngày 1--30, 31--90, 91--180, 181--365 và 366+. Sau đó,
+pipeline chọn multiplier và median residual bias để calibration. Cuối cùng,
+damped Kalman residual projector chỉ được giữ nếu grid search trên OOF folds cải
+thiện MAE; nếu không, strength của Kalman được đặt bằng 0.
 
-\section{Conclusion}
+\subsection{Thiết kế validation theo thời gian}
 
-Summarize the takeaway and possible next steps.
+Cấu hình mặc định dùng validation horizon 548 ngày, step size 365 ngày và tối đa
+3 folds. Mỗi fold là một expanding-window backtest: train indices luôn đứng
+trước validation indices. Vì validation horizon dài hơn step size, các validation
+windows liền kề có thể overlap; tuy nhiên, không fold nào train trên nhãn của
+chính validation period hoặc trên bất kỳ nhãn tương lai nào của test period. Đây
+là ràng buộc quan trọng nhất để cross-validation đúng cho bài toán chuỗi thời
+gian.
 
-\begin{ack}
-Acknowledgments are shown in preprint/final mode and hidden in anonymous
-submission mode by the NeurIPS style file.
-\end{ack}
+\section{Thiết lập thực nghiệm}
+
+Pipeline đọc \texttt{sales.csv}, \texttt{sample\_submission.csv} và dùng
+\texttt{promotions.csv} nếu file này tồn tại. Ngày được chuẩn hóa, các dòng sales
+trùng ngày bị loại bỏ, Revenue/COGS được ép kiểu số và clip không âm. File sample
+được rút gọn chỉ còn cột \texttt{Date} trước khi tạo feature, nên target trong
+template test không thể đi vào mô hình.
+
+Metric nội bộ chính là MAE; RMSE và $R^2$ được in thêm để diagnostic. Notebook
+ghi ba file OOF: \texttt{v5\_oof\_revenue.csv},
+\texttt{v5\_oof\_cogs\_direct.csv} và \texttt{v5\_oof\_cogs\_ratio.csv}. Các
+artifact này chứa actual values, prediction của từng candidate, global blend,
+horizon-bucket blend, calibrated predictions và Kalman-gated output. Đây là cơ
+sở thực nghiệm chính để so sánh từng head và từng bước hậu xử lý.
+
+\section{Kết quả thực nghiệm}
+
+\subsection{So sánh mô hình trên OOF}
+
+Khi chạy notebook, mỗi target sẽ in một bảng metric. Bảng này so sánh seasonal
+anchor, từng XGBoost candidate, global blend, horizon-bucket blend, calibrated
+blend và Kalman-gated forecast. File summary JSON lưu lại global weights, bucket
+weights, calibration parameters, Kalman strength và COGS reconciliation weight.
+Nhờ vậy ensemble có thể được giải thích ở cấp mô hình: weight lớn cho thấy OOF
+search tin candidate đó nhiều hơn cho target hoặc horizon bucket tương ứng; còn
+Kalman strength bằng 0 nghĩa là residual correction đã bị validation gate loại.
+
+Bảng~\ref{tab:diagnostics} liệt kê các diagnostics được tạo bởi một lần chạy đầy
+đủ và cách đọc chúng trong báo cáo.
+
+\begin{table}[h]
+  \centering
+  \caption{Các artifact thực nghiệm được tạo bởi notebook V5 Hybrid.}
+  \label{tab:diagnostics}
+  \small
+  \begin{tabular}{p{0.39\linewidth}p{0.52\linewidth}}
+    \toprule
+    Artifact & Ý nghĩa \\
+    \midrule
+    \path{v5_summary.json} &
+      Metrics, blend weights, calibration, Kalman gate và COGS alpha. \\
+    \path{v5_oof_*.csv} &
+      Actual và prediction theo fold để so sánh từng candidate. \\
+    \path{v5_final_*_components.csv} &
+      Forecast component trên test period trước reconciliation cuối. \\
+    \path{submission_v5_hybrid_model_only.csv} &
+      Forecast thuần từ mô hình, chưa anchor blend. \\
+    \path{submission_v5_recommended.csv} &
+      Submission được khuyến nghị, có thể đã anchor-blend sau forecast. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Kiểm tra phân phối submission}
+
+Snapshot hiện tại của repository có file \texttt{submission\_v5\_recommended.csv}
+gồm 548 dòng dự báo từ 2023-01-01 đến 2024-07-01. Bảng~\ref{tab:submission_summary}
+tóm tắt file forecast này. Đây không phải validation score; đây là kiểm tra phân
+phối output để xác nhận horizon, scale và non-negativity.
+
+\begin{table}[h]
+  \centering
+  \caption{Thống kê tóm tắt của recommended submission đã sinh.}
+  \label{tab:submission_summary}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    Target & Mean & Std. & Min & Median & Max & Dòng âm \\
+    \midrule
+    Revenue & 3.309M & 1.660M & 0.806M & 3.103M & 10.339M & 0 \\
+    COGS    & 3.064M & 1.540M & 0.649M & 2.838M &  9.496M & 0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Giải thích mô hình}
+
+Notebook cung cấp explainability ở cấp mô hình thông qua OOF component metrics,
+blend weights, horizon-bucket weights, calibration parameters và quyết định
+Kalman gate. Đây là lớp giải thích an toàn nhất vì được tính từ chính validation
+predictions dùng để chọn ensemble cuối. Nếu cần giải thích feature-level, có thể
+chạy SHAP trên XGBoost head được chọn như một bước post-hoc mà không thay đổi
+forecast:
+\begin{equation}
+  I_j = \frac{1}{n}\sum_{i=1}^{n} |\phi_{ij}|,
+\end{equation}
+trong đó $\phi_{ij}$ là SHAP contribution của feature $j$ tại mẫu $i$. Các giá
+trị $I_j$ sau khi xếp hạng có thể được báo cáo cùng các diagnostics ở cấp mô
+hình.
+
+\section{Hạn chế}
+
+Phương pháp này được thiết kế bảo thủ và hướng tới leaderboard. Thứ nhất, mô
+hình chỉ dùng chuỗi tổng hợp, chưa khai thác hierarchy theo sản phẩm, kênh hoặc
+cửa hàng. Thứ hai, validation windows overlap giúp có thêm long-horizon
+backtests nhưng không tạo ra các mẫu lỗi hoàn toàn độc lập. Thứ ba, recursive
+lag forecasting có thể tích lũy sai số ở horizon dài, dù ensemble đã giảm rủi ro
+bằng deterministic known-future heads và seasonal anchors. Cuối cùng, anchor
+blend là chiến lược hậu xử lý submission, không phải cải thiện mô hình được
+validate, nên được tách khỏi training pipeline.
+
+\section{Kết luận}
+
+V5 Hybrid kết hợp leakage-safe feature engineering, validation đúng chiều thời
+gian, model library XGBoost đa dạng, OOF blending, calibration, Kalman residual
+gating và COGS reconciliation có cấu trúc. Pipeline này có khả năng tái lập,
+giải thích được ở cấp component và phù hợp với ràng buộc của bài toán dự báo tài
+chính dài hạn theo ngày.
+
+\section*{Lời cảm ơn}
+
+Báo cáo này được chuẩn bị cho phần thuyết minh dự án tại VinUniversity Datathon.
 
 \input{references.tex}
 
 \input{appendix.tex}
 
-% Uncomment this only if the submission requires the NeurIPS paper checklist.
+% Call for Papers của NeurIPS 2025 yêu cầu checklist khi nộp thật.
+% Khi cần nộp theo NeurIPS, bỏ comment các dòng dưới và điền checklist.tex.
 % \newpage
 % \input{checklist.tex}
 

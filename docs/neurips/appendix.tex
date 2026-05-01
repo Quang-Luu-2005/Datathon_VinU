@@ -1,15 +1,25 @@
 \appendix
 
-\section{Additional Experimental Details}
+\section{Chi tiết thực nghiệm bổ sung}
 
-Add supplementary dataset details, preprocessing rules, hyperparameters, and
-implementation notes here.
+Notebook được thiết kế để chạy trực tiếp trên Kaggle hoặc môi trường local có
+đủ các file dữ liệu của cuộc thi. Các tham số quan trọng gồm
+\texttt{val\_days = 548}, \texttt{step\_days = 365},
+\texttt{max\_folds = 3}, \texttt{n\_blend\_samples = 12000}, và
+\texttt{seed = 42}. Khi cần smoke test nhanh, có thể bật
+\texttt{RUN\_FAST\_LOCAL=True} để giảm số cây của
+các mô hình XGBoost.
 
-\section{Additional Results}
+\section{Kết quả bổ sung}
 
-Add extra tables, figures, ablations, robustness checks, or qualitative examples
-here.
+Các bảng OOF chi tiết nằm trong các file \path{v5_oof_*.csv}. Các file
+\path{v5_final_*_components.csv} cho phép kiểm tra từng component forecast
+trong giai đoạn submission, bao gồm seasonal anchor, từng candidate XGBoost,
+\texttt{blend\_bucket}, \texttt{calibrated} và \texttt{kalman\_gated}.
 
-\section{Limitations and Broader Impact}
+\section{Hạn chế và tác động rộng hơn}
 
-Add extended discussion of limitations, failure cases, and broader impact here.
+Mô hình phục vụ mục tiêu dự báo vận hành và lập kế hoạch tài chính. Rủi ro chính
+là forecast sai có thể dẫn đến lập kế hoạch tồn kho hoặc ngân sách chưa tối ưu.
+Do đó, prediction nên được dùng cùng kiểm tra nghiệp vụ và không nên xem là một
+quyết định tự động không cần giám sát.
